@@ -10,18 +10,16 @@ import region_selector
 import point_selector
 
 # Configuration
-BAR_WIDTH_THRESHOLD = 65
+BAR_WIDTH_THRESHOLD = 80
 DIG_COOLDOWN_SECONDS = 0.22
-CHECK_IS_DIGGING_BLACK_COLOR_THRESHOLD = 25
-START_DIGGING_COOLDOWN_SECONDS = 12
 CONFIG_FILE = "macro_config.json"
 
-# Global variables
-mouse_controller = pynput.mouse.Controller()
-keyboard_controller = pynput.keyboard.Controller()
+# Global state
 is_running = False
 scan_region = None
 digging_check_point = None
+mouse_controller = pynput.mouse.Controller()
+keyboard_controller = pynput.keyboard.Controller()
 
 
 def save_config():
@@ -64,26 +62,9 @@ def set_digging_check_point():
     return False
 
 
-def check_is_digging(sct):
-    """Returns False if not digging"""
-    if not digging_check_point:
-        return False
-
-    pixel = np.array(sct.grab(digging_check_point))
-    return not all(
-        channel <= CHECK_IS_DIGGING_BLACK_COLOR_THRESHOLD for channel in pixel[0, 0, :3]
-    )
-
-
-def move():
-    keyboard_controller.press("w")
-    keyboard_controller.press("d")
-    time.sleep(0.3)
-    keyboard_controller.release("w")
-    keyboard_controller.release("d")
-
-
 def start_macro():
+    global is_running
+
     # Load config at start
     config = load_config()
     global scan_region, digging_check_point
@@ -98,28 +79,12 @@ def start_macro():
         print("Set digging check point first (Ctrl+P)")
         return
 
-    global is_running
     is_running = True
-    print("Macro started (Ctrl+E to stop)")
-
-    # Variables
-    last_start_digging_time = time.time()
     last_dig_time = 0
+    print("Macro started (Ctrl+E to stop)")
 
     with mss.mss() as sct:
         while is_running:
-            current_time = time.time()
-
-            # Move and start digging if not digging
-            if (
-                current_time - last_start_digging_time > START_DIGGING_COOLDOWN_SECONDS
-                and not check_is_digging(sct)
-            ):
-                move()
-                time.sleep(1)
-                mouse_controller.click(pynput.mouse.Button.left)
-                last_start_digging_time = current_time
-
             # Capture and process screenshot
             screenshot = np.array(sct.grab(scan_region))
             gray = cv2.cvtColor(screenshot, cv2.COLOR_BGRA2GRAY)
@@ -132,7 +97,7 @@ def start_macro():
                 1 for c in contours if cv2.boundingRect(c)[2] > BAR_WIDTH_THRESHOLD
             )
 
-            # Dig if bar count is 2
+            current_time = time.time()
             if current_time - last_dig_time > DIG_COOLDOWN_SECONDS and bar_count == 2:
                 mouse_controller.click(pynput.mouse.Button.left)
                 last_dig_time = current_time

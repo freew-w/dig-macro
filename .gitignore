@@ -1,4 +1,4 @@
 __pycache__/
 venv/
-images/
-scan_region_*
+macro_config.json
+old/
